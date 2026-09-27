@@ -1,0 +1,5 @@
+{
+  "name": "txnstage",
+  "private": true,
+  "type": "module"
+}

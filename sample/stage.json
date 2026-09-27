@@ -1,0 +1,15 @@
+{
+  "not_prepared_error_code": "E_NOT_PREPARED",
+  "event_error_code": "E_BAD_EVENT",
+  "budget": 1,
+  "state": { "prepared": [], "committed": [], "aborted": [], "log": [], "applied": [] },
+  "events": [
+    { "id": 1, "kind": "prepare", "tx": 1 },
+    { "id": 2, "kind": "commit", "tx": 1 },
+    { "id": 3, "kind": "prepare", "tx": 2 },
+    { "id": 4, "kind": "prepare", "tx": 3 },
+    { "id": 5, "kind": "abort", "tx": 3 },
+    { "id": 6, "kind": "commit", "tx": 2 },
+    { "id": 7, "kind": "prepare", "tx": 1 }
+  ]
+}

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>txnstage · 画布</title>
+<style>
+:root{--accent:#b8551f;--soft:#fde8d8}
+body{margin:0;background:#0b1220;color:#e6ecf7;font-family:system-ui,sans-serif}
+header{padding:16px 22px 10px}
+h1{font-size:18px;margin:0 0 6px;letter-spacing:.5px}
+.hint{color:#93a4c3;font-size:13px;margin:0}
+.shell{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;padding:6px 22px 22px}
+#controls{display:flex;flex-direction:column;gap:8px;background:#111c31;border:1px solid #1e2b45;border-radius:14px;padding:12px}
+#controls button{font:inherit;padding:9px 11px;border-radius:10px;border:1px solid #26344f;background:#16223a;color:#dbe6ff;cursor:pointer;text-align:left}
+#controls button.primary{background:var(--accent);border-color:var(--accent);color:#08111f;font-weight:600}
+#controls input{font:inherit;padding:7px 9px;border-radius:9px;border:1px solid #26344f;background:#0d1728;color:#e6ecf7;width:100%}
+#controls label{font-size:12px;color:#8fa1c0;margin-top:4px}
+#stage{min-height:340px;border-radius:16px;border:1px solid #1e2b45;background:#0e1930;
+  background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.04) 0 1px,transparent 1px 22px),
+                   repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1px,transparent 1px 22px);
+  padding:16px;display:flex;flex-wrap:wrap;gap:10px;align-content:flex-start}
+#stage .card{background:#13203a;border:1px solid #24334f;border-radius:12px;padding:10px 12px;font-size:13px}
+#stage .chip{border-radius:999px;padding:3px 10px;font-size:12px;background:#1b2a45;color:#c9d8f5}
+#stage .chip.ok{background:var(--soft);color:#0b1220}
+#stage .chip.bad{background:#3a1618;color:#ffb4ae}
+#stage .row{display:flex;align-items:center;gap:10px;background:#101c33;border-radius:12px;padding:8px 12px;width:100%}
+#stage .bar{height:18px;border-radius:9px;background:#1d2c48;flex:1;position:relative}
+#stage .bar i{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:9px}
+#legend{color:#93a4c3;font-size:12px;padding:10px 22px 0}
+pre#out{background:#050a14;color:#9ff5d8;border:1px solid #1e2b45;border-radius:12px;padding:12px;margin:10px 22px;font-size:12px;overflow:auto}
+#log{color:#8fa1c0;font-size:12px;padding:0 22px 10px;font-style:italic}
+details{padding:0 22px 30px;color:#93a4c3;font-size:13px}
+textarea{width:100%;height:130px;background:#050a14;color:#c9d8f5;border:1px solid #1e2b45;border-radius:12px;font-family:ui-monospace,monospace;font-size:12px;padding:10px}
+#reload{font:inherit;margin-top:8px;padding:7px 14px;border-radius:10px;border:1px solid #26344f;background:#16223a;color:#dbe6ff;cursor:pointer}
+</style></head>
+<body>
+<header><h1>txnstage · 画布</h1><p class="hint">点按钮改清理预算、减事件，右边看提交、中止与压账。</p></header>
+<div class="shell">
+  <section id="controls"></section>
+  <section id="stage"></section>
+</div>
+<div id="legend"></div>
+<pre id="out">还没跑</pre>
+<div id="log"></div>
+
+<details>
+  <summary>场景数据（可以直接改，改完点重新载入）</summary>
+  <textarea id="input">{
+  "not_prepared_error_code": "E_NOT_PREPARED",
+  "event_error_code": "E_BAD_EVENT",
+  "budget": 1,
+  "state": { "prepared": [], "committed": [], "aborted": [], "log": [], "applied": [] },
+  "events": [
+    { "id": 1, "kind": "prepare", "tx": 1 },
+    { "id": 2, "kind": "commit", "tx": 1 },
+    { "id": 3, "kind": "prepare", "tx": 2 },
+    { "id": 4, "kind": "prepare", "tx": 3 },
+    { "id": 5, "kind": "abort", "tx": 3 },
+    { "id": 6, "kind": "commit", "tx": 2 },
+    { "id": 7, "kind": "prepare", "tx": 1 }
+  ]
+}</textarea>
+  <button id="reload">重新载入场景</button>
+</details>
+<script type="module">
+import { mount } from "./ui.js";
+
+const parts = {
+  controls: document.getElementById("controls"),
+  stage: document.getElementById("stage"),
+  out: document.getElementById("out"),
+  legend: document.getElementById("legend"),
+  log: document.getElementById("log")
+};
+
+function start(spec) {
+  try {
+    mount(spec, parts);
+  } catch (error) {
+    parts.out.textContent = String(error && error.stack ? error.stack : error);
+  }
+}
+
+document.getElementById("reload").addEventListener("click", function () {
+  try {
+    start(JSON.parse(document.getElementById("input").value));
+  } catch (error) {
+    parts.out.textContent = String(error);
+  }
+});
+
+start(JSON.parse(document.getElementById("input").value));
+</script>
+</body></html>
