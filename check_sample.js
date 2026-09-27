@@ -40,6 +40,62 @@ emit("工作计数未超上界 =", first.judged <= first.judged_bound);
 emit("与全量对照差异 =", fingerprint(closed.state) === fingerprint(fullClosed.state) ? 0 : 1);
 
 
+// ---- 七条机检断言：直接断言事实，任一不符即非零退出 ----
+import assert from "node:assert";
+let assertionsFailed = 0;
+function machineCheck(name, fn) {
+  try { fn(); console.log("assert ok " + name); }
+  catch (error) { assertionsFailed += 1; console.log("assert FAIL " + name + " :: " + error.message); }
+}
+function expectCode(events) {
+  try {
+    step({ state: { prepared: [], committed: [], aborted: [], log: [], applied: [] }, events: events, budget: 1 });
+    return "没有报错";
+  } catch (error) {
+    return error && error.code ? error.code : String(error && error.message);
+  }
+}
+const fullDiff = fingerprint(closed.state) === fingerprint(fullClosed.state) ? 0 : 1;
+
+// 1) 两个预算档的清理条数必须不同
+machineCheck("两档清理不同", function () {
+  assert.notStrictEqual(first.cleaned, wide.cleaned);
+});
+// 2) 收尾前有待清理条目，收尾后日志归零
+machineCheck("收尾前大于零而收尾后归零", function () {
+  assert.ok(first.pending_before > 0);
+  assert.strictEqual(closed.state.log.length, 0);
+});
+// 3) 拆两轮的中间态不同，但收尾后两态一致
+machineCheck("拆两轮中间态不同而收尾态一致", function () {
+  assert.notStrictEqual(fingerprint(r2.state), fingerprint(first.state));
+  assert.strictEqual(fingerprint(closedTwo.state), fingerprint(closed.state));
+});
+// 4) 在收尾后的状态上重放，不再产生清理
+machineCheck("重放不再清理", function () {
+  assert.strictEqual(replay.cleaned, 0);
+});
+// 5) 工作计数不超过事件条数上界
+machineCheck("工作计数不超事件条数", function () {
+  assert.ok(first.judged <= first.judged_bound);
+  assert.ok(first.judged_bound <= events.length);
+});
+// 6) 与全量预算对照，收尾态差异为零
+machineCheck("与全量对照为零", function () {
+  assert.strictEqual(fullDiff, 0);
+});
+// 7) 状态型异常探针真调：未准备落定 / 坏事件（含字段缺失）报对应码且带 code
+machineCheck("状态型异常探针真调", function () {
+  assert.strictEqual(expectCode([{ id: 1, kind: "commit", tx: 9 }]), spec.not_prepared_error_code || "E_NOT_PREPARED");
+  assert.strictEqual(expectCode([{ id: 2, kind: "peek", tx: 1 }]), spec.event_error_code || "E_BAD_EVENT");
+  assert.strictEqual(expectCode([{ id: 3, kind: "prepare" }]), spec.event_error_code || "E_BAD_EVENT");
+});
+if (assertionsFailed !== 0) {
+  console.log("机检断言 " + (7 - assertionsFailed) + "/7 通过");
+  process.exit(1);
+}
+console.log("机检断言 7/7 通过");
+
 // ---- 异常路径探针：真调用实现，看它报出什么码（不是从样例里抄）----
 try {
   step(Object.assign({}, { state: { prepared: [], committed: [], aborted: [], log: [], applied: [] },
