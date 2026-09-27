@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import { canCommit, isSettledTx } from "./stage.js";
+import assert from "node:assert";
 import { step, close } from "./txnrun.js";
 
-// 验收断言：上面每条值收进 emit，最后与期望值逐项比对，不符就非零退出。
+// 验收脚本：每条值收进 emit 与期望逐项比对；另带七条机检断言，真调实现，不符即非零退出。
 const __lines = [];
 function emit(label, value) { __lines.push([String(label).replace(/ =$/, ""), value]); }
 
@@ -41,20 +41,55 @@ emit("与全量对照差异 =", fingerprint(closed.state) === fingerprint(fullCl
 
 
 // ---- 异常路径探针：真调用实现，看它报出什么码（不是从样例里抄）----
-try {
-  step(Object.assign({}, { state: { prepared: [], committed: [], aborted: [], log: [], applied: [] },
-    events: [{ id: 1, kind: "commit", tx: 9 }], budget: 1 }));
-  emit("未准备写错的错误码", "没有报错");
-} catch (error) {
-  emit("未准备写错的错误码", error && error.code ? error.code : String(error.message));
+function probe(eventsToTry) {
+  try {
+    step({ state: { prepared: [], committed: [], aborted: [], log: [], applied: [] },
+      events: eventsToTry, budget: 1 });
+    return null;
+  } catch (error) {
+    return error && error.code ? error.code : String(error && error.message);
+  }
 }
-try {
-  step(Object.assign({}, { state: { prepared: [], committed: [], aborted: [], log: [], applied: [] },
-    events: [{ id: 1, kind: "peek", tx: 1 }], budget: 1 }));
-  emit("事件写错的错误码", "没有报错");
-} catch (error) {
-  emit("事件写错的错误码", error && error.code ? error.code : String(error.message));
+const notPreparedCode = probe([{ id: 1, kind: "commit", tx: 9 }]);
+const badEventCode = probe([{ id: 1, kind: "peek", tx: 1 }]);
+emit("未准备写错的错误码", notPreparedCode);
+emit("事件写错的错误码", badEventCode);
+
+
+// ---- 七条机检断言：脚本自己断言的事实（真调实现，不靠样例抄值）----
+const assertions = [
+  ["两档预算清理条数必须不同", function () {
+    assert.notStrictEqual(first.cleaned, wide.cleaned);
+  }],
+  ["收尾前待清理大于零且收尾后归零", function () {
+    assert.ok(first.pending_before > 0, "收尾前应有压账条目");
+    assert.strictEqual(closed.state.log.length, 0);
+  }],
+  ["拆两轮中间态不同而收尾态一致", function () {
+    assert.notStrictEqual(fingerprint(r2.state), fingerprint(first.state));
+    assert.strictEqual(fingerprint(closedTwo.state), fingerprint(closed.state));
+  }],
+  ["收尾后重放不再产生清理", function () {
+    assert.strictEqual(replay.cleaned, 0);
+  }],
+  ["工作计数不超事件条数", function () {
+    assert.ok(first.judged >= 0);
+    assert.ok(first.judged <= events.length);
+  }],
+  ["与全量预算对照差异为零", function () {
+    assert.strictEqual(fingerprint(closed.state), fingerprint(fullClosed.state));
+  }],
+  ["状态型异常探针真调且错误带 code", function () {
+    assert.strictEqual(notPreparedCode, "E_NOT_PREPARED");
+    assert.strictEqual(badEventCode, "E_BAD_EVENT");
+  }]
+];
+let __assertBad = 0;
+for (const [name, fn] of assertions) {
+  try { fn(); console.log("断言通过 " + name); }
+  catch (error) { __assertBad += 1; console.log("断言失败 " + name + " :: " + (error && error.message)); }
 }
+console.log("机检断言 " + (assertions.length - __assertBad) + "/" + assertions.length + " 条通过");
 
 
 // ---- 期望值（参考模型算出，与题面给的验收数值一致）----
@@ -97,4 +132,4 @@ for (const [label, want] of Object.entries(EXPECTED)) {
   else { __bad += 1; console.log("不一致 " + label + " 期望 " + JSON.stringify(want) + " 实际 " + JSON.stringify(got)); }
 }
 console.log("验收项 " + (Object.keys(EXPECTED).length - __bad) + "/" + Object.keys(EXPECTED).length + " 通过");
-process.exit(__bad === 0 ? 0 : 1);
+process.exit(__bad === 0 && __assertBad === 0 ? 0 : 1);
